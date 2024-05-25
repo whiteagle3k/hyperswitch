@@ -515,6 +515,7 @@ pub struct Connectors {
     #[cfg(feature = "dummy_connector")]
     pub dummyconnector: ConnectorParams,
     pub ebanx: ConnectorParams,
+    pub everypay: ConnectorParams,
     pub fiserv: ConnectorParams,
     pub forte: ConnectorParams,
     pub globalpay: ConnectorParams,
@@ -524,6 +525,7 @@ pub struct Connectors {
     pub helcim: ConnectorParams,
     pub iatapay: ConnectorParams,
     pub klarna: ConnectorParams,
+    pub makecommerce: ConnectorParams,
     pub mifinity: ConnectorParams,
     pub mollie: ConnectorParams,
     pub multisafepay: ConnectorParams,

@@ -90,6 +90,7 @@ pub enum Connector {
     Cybersource,
     Dlocal,
     Ebanx,
+    Everypay,
     Fiserv,
     Forte,
     Globalpay,
@@ -100,6 +101,7 @@ pub enum Connector {
     Iatapay,
     Klarna,
     // Mifinity, Added as template code for future usage
+    Makecommerce,
     Mollie,
     Multisafepay,
     Netcetera,
@@ -205,6 +207,7 @@ impl Connector {
             | Self::Cryptopay
             | Self::Dlocal
             | Self::Ebanx
+            | Self::Everypay
             | Self::Fiserv
             | Self::Forte
             | Self::Globalpay
@@ -215,6 +218,7 @@ impl Connector {
             | Self::Iatapay
             | Self::Klarna
             // | Self::Mifinity Added as template code for future usage
+            | Self::Makecommerce
             | Self::Mollie
             | Self::Multisafepay
             | Self::Nexinets

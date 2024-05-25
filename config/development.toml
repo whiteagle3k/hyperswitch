@@ -110,6 +110,7 @@ cards = [
     "dlocal",
     "dummyconnector",
     "ebanx",
+    "everypay",
     "fiserv",
     "forte",
     "globalpay",
@@ -188,6 +189,7 @@ cybersource.base_url = "https://apitest.cybersource.com/"
 dlocal.base_url = "https://sandbox.dlocal.com/"
 dummyconnector.base_url = "http://localhost:8080/dummy-connector"
 ebanx.base_url = "https://sandbox.ebanxpay.com/"
+everypay.base_url = "https://igw-demo.every-pay.com/api/v4"
 fiserv.base_url = "https://cert.api.fiservapps.com/"
 forte.base_url = "https://sandbox.forte.net/api/v3"
 globalpay.base_url = "https://apis.sandbox.globalpay.com/ucp/"

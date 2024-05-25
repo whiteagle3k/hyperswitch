@@ -83,9 +83,6 @@ pub enum AttemptStatus {
 #[strum(serialize_all = "snake_case")]
 /// Connectors eligible for payments routing
 pub enum RoutableConnectors {
-    #[cfg(feature = "dummy_connector")]
-    #[serde(rename = "phonypay")]
-    #[strum(serialize = "phonypay")]
     DummyConnector1,
     #[cfg(feature = "dummy_connector")]
     #[serde(rename = "fauxpay")]
@@ -129,6 +126,7 @@ pub enum RoutableConnectors {
     Cybersource,
     Dlocal,
     Ebanx,
+    Everypay,
     Fiserv,
     Forte,
     Globalpay,
@@ -137,6 +135,7 @@ pub enum RoutableConnectors {
     Helcim,
     Iatapay,
     Klarna,
+    Makecommerce,
     Mifinity,
     Mollie,
     Multisafepay,

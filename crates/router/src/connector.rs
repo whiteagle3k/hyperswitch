@@ -18,6 +18,7 @@ pub mod dlocal;
 #[cfg(feature = "dummy_connector")]
 pub mod dummyconnector;
 pub mod ebanx;
+pub mod everypay;
 pub mod fiserv;
 pub mod forte;
 pub mod globalpay;
@@ -27,6 +28,7 @@ pub mod gpayments;
 pub mod helcim;
 pub mod iatapay;
 pub mod klarna;
+pub mod makecommerce;
 pub mod mifinity;
 pub mod mollie;
 pub mod multisafepay;
@@ -70,9 +72,9 @@ pub use self::{
     bambora::Bambora, bankofamerica::Bankofamerica, billwerk::Billwerk, bitpay::Bitpay,
     bluesnap::Bluesnap, boku::Boku, braintree::Braintree, cashtocode::Cashtocode,
     checkout::Checkout, coinbase::Coinbase, cryptopay::Cryptopay, cybersource::Cybersource,
-    dlocal::Dlocal, ebanx::Ebanx, fiserv::Fiserv, forte::Forte, globalpay::Globalpay,
-    globepay::Globepay, gocardless::Gocardless, gpayments::Gpayments, helcim::Helcim,
-    iatapay::Iatapay, klarna::Klarna, mifinity::Mifinity, mollie::Mollie,
+    dlocal::Dlocal, ebanx::Ebanx, everypay::Everypay, fiserv::Fiserv, forte::Forte,
+    globalpay::Globalpay, globepay::Globepay, gocardless::Gocardless, gpayments::Gpayments,
+    helcim::Helcim, iatapay::Iatapay, klarna::Klarna, makecommerce::Makecommerce, mifinity::Mifinity, mollie::Mollie,
     multisafepay::Multisafepay, netcetera::Netcetera, nexinets::Nexinets, nmi::Nmi, noon::Noon,
     nuvei::Nuvei, opayo::Opayo, opennode::Opennode, payeezy::Payeezy, payme::Payme, payone::Payone,
     paypal::Paypal, payu::Payu, placetopay::Placetopay, powertranz::Powertranz,

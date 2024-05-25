@@ -230,3 +230,7 @@ api_key="API Key"
 
 [gpayments]
 api_key="API Key"
+
+
+[everypay]
+api_key="API Key"
