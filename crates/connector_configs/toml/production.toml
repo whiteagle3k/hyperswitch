@@ -1266,6 +1266,22 @@ key1="Client ID"
 [paypal.connector_webhook_details]
 merchant_secret="Source verification key"
 
+[everypay]
+[[everypay.card_redirect]]
+payment_method_type = "card_redirect"
+[everypay.connector_auth.MultiAuthKey]
+api_key="API username"
+key1="Processing Account"
+api_secret="API secret"
+key2="Base URL"
+
+[makecommerce]
+[[makecommerce.card_redirect]]
+payment_method_type = "card_redirect"
+[makecommerce.connector_auth.BodyKey]
+api_key="API key"
+key1="Shop ID"
+
 [payu]
 [[payu.credit]]
   payment_method_type = "Mastercard"

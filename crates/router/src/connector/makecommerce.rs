@@ -71,6 +71,8 @@ where
         header.append(&mut api_key);
         Ok(header)
     }
+
+    
 }
 
 impl ConnectorCommon for Makecommerce {
@@ -86,10 +88,8 @@ impl ConnectorCommon for Makecommerce {
         "application/json"
     }
 
-    fn base_url<'a>(&self, _connectors: &'a settings::Connectors) -> &'a str {
-        // The base url for the makecommerce differs per merchant and bank provider (everypat, SEB, etc.),
-        // therefor its defined in key2 in the connector auth config
-        ""
+    fn base_url<'a>(&self, connectors: &'a settings::Connectors) -> &'a str {
+        connectors.makecommerce.base_url.as_str()
     }
 
     fn get_auth_header(
@@ -99,7 +99,7 @@ impl ConnectorCommon for Makecommerce {
         let auth = makecommerce::MakecommerceAuthType::try_from(auth_type)
             .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
 
-        let auth_val = format!("{}:{}", auth.api_username.peek(), auth.api_secret.peek());
+        let auth_val = format!("{}:{}", auth.shop_id.peek(), auth.api_key.peek());
         let basic_token = format!("Basic {}", consts::BASE64_ENGINE.encode(auth_val));
 
         Ok(vec![(
@@ -173,12 +173,10 @@ impl ConnectorIntegration<api::Authorize, types::PaymentsAuthorizeData, types::P
 
     fn get_url(
         &self,
-        _req: &types::PaymentsAuthorizeRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::PaymentsAuthorizeRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        let auth = makecommerce::MakecommerceAuthType::try_from(&_req.connector_auth_type)
-            .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
-        Ok(format!("{}/payments/oneoff", auth.base_url.peek()))
+        Ok(format!("{}/transactions", connectors.makecommerce.base_url))
     }
 
     fn get_request_body(
@@ -277,17 +275,15 @@ impl
 
     fn get_url(
         &self,
-        _req: &types::PaymentsCompleteAuthorizeRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::PaymentsCompleteAuthorizeRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        let request_body = makecommerce::MakecommercePaymentSyncRequest::try_from(_req)?;
+        let request_body = makecommerce::MakecommercePaymentSyncRequest::try_from(req)?;
 
         Ok(format!(
-            "{}/payments/{}?api_username={}&detailed={}",
-            request_body.base_url.peek(),
-            request_body.payment_reference,
-            request_body.api_username.peek(),
-            request_body.detailed
+            "{}/transactions/{}",
+            connectors.makecommerce.base_url,
+            request_body.payment_reference
         ))
     }
 
@@ -357,17 +353,15 @@ impl ConnectorIntegration<api::PSync, types::PaymentsSyncData, types::PaymentsRe
 
     fn get_url(
         &self,
-        _req: &types::PaymentsSyncRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::PaymentsSyncRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        let request_body = makecommerce::MakecommercePaymentSyncRequest::try_from(_req)?;
+        let request_body = makecommerce::MakecommercePaymentSyncRequest::try_from(req)?;
 
         Ok(format!(
-            "{}/payments/{}?api_username={}&detailed={}",
-            request_body.base_url.peek(),
-            request_body.payment_reference,
-            request_body.api_username.peek(),
-            request_body.detailed
+            "{}/transactions/{}",
+            connectors.makecommerce.base_url,
+            request_body.payment_reference
         ))
     }
 
@@ -443,12 +437,17 @@ impl ConnectorIntegration<api::Execute, types::RefundsData, types::RefundsRespon
 
     fn get_url(
         &self,
-        _req: &types::RefundsRouterData<api::Execute>,
-        _connectors: &settings::Connectors,
+        req: &types::RefundsRouterData<api::Execute>,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        let auth = makecommerce::MakecommerceAuthType::try_from(&_req.connector_auth_type)
-            .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
-        Ok(format!("{}/payments/refund", auth.base_url.peek()))
+        let connector_router_data = makecommerce::MakecommerceRouterData::try_from((
+            &self.get_currency_unit(),
+            req.request.currency,
+            req.request.refund_amount,
+            req,
+        ))?;
+        let req_obj = makecommerce::MakecommerceRefundRequest::try_from(&connector_router_data)?;
+        Ok(format!("{}/transactions/{}/refunds", req_obj.payment_reference, connectors.makecommerce.base_url))
     }
 
     fn get_request_body(
@@ -535,17 +534,15 @@ impl ConnectorIntegration<api::RSync, types::RefundsData, types::RefundsResponse
 
     fn get_url(
         &self,
-        _req: &types::RefundSyncRouterData,
-        _connectors: &settings::Connectors,
+        req: &types::RefundSyncRouterData,
+        connectors: &settings::Connectors,
     ) -> CustomResult<String, errors::ConnectorError> {
-        let request_body = makecommerce::MakecommerceRefundSyncRequest::try_from(_req)?;
+        let request_body = makecommerce::MakecommerceRefundSyncRequest::try_from(req)?;
 
         Ok(format!(
-            "{}/payments/{}?api_username={}&detailed={}",
-            request_body.base_url.peek(),
-            request_body.payment_reference,
-            request_body.api_username.peek(),
-            request_body.detailed
+            "{}/transactions/{}",
+            connectors.makecommerce.base_url,
+            request_body.payment_reference
         ))
     }
 

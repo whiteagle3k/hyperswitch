@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use common_utils::{errors::CustomResult, pii::Email};
 use error_stack::ResultExt;
 use masking::Secret;
@@ -7,7 +9,7 @@ use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use url::Url;
 
 use crate::{
-    connector::utils,
+    connector::utils::{self, PaymentsAuthorizeRequestData},
     core::errors,
     services,
     types::{self, api, domain, storage::enums},
@@ -46,26 +48,20 @@ impl<T>
 
 // Auth Struct
 pub struct MakecommerceAuthType {
-    pub(super) api_username: Secret<String>,
-    pub(super) api_secret: Secret<String>,
-    pub(super) account_name: Secret<String>,
-    pub(super) base_url: Secret<String>,
+    pub(super) api_key: Secret<String>,
+    pub(super) shop_id: Secret<String>,
 }
 
 impl TryFrom<&types::ConnectorAuthType> for MakecommerceAuthType {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(auth_type: &types::ConnectorAuthType) -> Result<Self, Self::Error> {
         match auth_type {
-            types::ConnectorAuthType::MultiAuthKey {
+            types::ConnectorAuthType::BodyKey {
                 api_key,
-                key1,
-                api_secret,
-                key2,
+                key1
             } => Ok(Self {
-                api_username: api_key.to_owned(),
-                api_secret: api_secret.to_owned(),
-                account_name: key1.to_owned(),
-                base_url: key2.to_owned(),
+                api_key: api_key.to_owned(),
+                shop_id: key1.to_owned()
             }),
             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
         }
@@ -91,41 +87,38 @@ pub enum TokenAgreement {
     Recurring,
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Transaction {
+    pub amount: String,
+    pub currency: String,
+    pub reference: String,
+    pub merchant_data: String,
+    pub recurring_required: String,
+    pub return_url: String,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Customer {
+    pub email: Option<Email>,
+    pub ip: String,
+    pub country: String,
+    pub locale: String,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AppInfo {
+    pub module: String,
+    pub module_version: String,
+    pub platform: String,
+    pub platform_version: String,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Default, Debug, Serialize)]
 pub struct MakecommercePaymentsRequest {
-    pub api_username: Secret<String>,
-    pub account_name: Secret<String>,
-    pub amount: f64,
-    pub customer_url: String,
-    pub token_agreement: TokenAgreement,
-    pub mobile_payment: bool,
-    pub order_reference: String,
-    pub nonce: String,
-    pub request_token: bool,
-    pub token_consent_agreed: bool,
-    pub timestamp: String,
-
-    pub token_lifetime: Option<i32>,
-    pub payment_description: Option<String>,
-
-    pub email: Option<Email>,
-    pub customer_ip: Option<String>,
-    pub preferred_country: Option<common_enums::CountryAlpha2>,
-    pub billing_city: Option<String>,
-    pub billing_country: Option<String>,
-    pub billing_line1: Option<String>,
-    pub billing_line2: Option<String>,
-    pub billing_line3: Option<String>,
-    pub billing_postcode: Option<String>,
-    pub billing_state: Option<String>,
-    pub shipping_city: Option<String>,
-    pub shipping_country: Option<String>,
-    pub shipping_line1: Option<String>,
-    pub shipping_line2: Option<String>,
-    pub shipping_line3: Option<String>,
-    pub shipping_code: Option<String>,
-    pub shipping_state: Option<String>,
+    pub transaction: Transaction,
+    pub customer: Customer,
+    pub app_info: AppInfo,
 }
 
 impl TryFrom<&MakecommerceRouterData<&types::PaymentsAuthorizeRouterData>> for MakecommercePaymentsRequest {
@@ -138,9 +131,6 @@ impl TryFrom<&MakecommerceRouterData<&types::PaymentsAuthorizeRouterData>> for M
                 domain::CardRedirectData::CardRedirect {},
             ) => {
                 logger::debug!("Received the router data {:?}", &item.router_data);
-                let auth_data =
-                    MakecommerceAuthType::try_from(&item.router_data.connector_auth_type)?;
-                let time = OffsetDateTime::now_utc();
 
                 let complete_auth_url = if env::which().to_string()
                     == RuntimeEnv::Development.to_string()
@@ -160,31 +150,40 @@ impl TryFrom<&MakecommerceRouterData<&types::PaymentsAuthorizeRouterData>> for M
                 // let len = timestamp_string.len();
 
                 //let order_reference_string = format!("{}-{}", &merchant_id_string[..2], &timestamp_string[len-5..]);
-
-                Ok(Self {
-                    api_username: auth_data.api_username,
-                    account_name: auth_data.account_name,
-                    amount: item.amount,
-                    customer_url: complete_auth_url.ok_or(
+                let transaction = Transaction {
+                    amount: item.amount.to_string(),
+                    currency: item.router_data.request.currency.to_owned().to_string(),
+                    reference: item.router_data.connector_request_reference_id.to_owned(),
+                    merchant_data: "".to_string(),
+                    recurring_required: "false".to_string(),
+                    return_url: complete_auth_url.ok_or(
                         errors::ConnectorError::InvalidConnectorConfig {
                             config: ("complete_authorize_url"),
                         },
                     )?,
-                    token_agreement: TokenAgreement::Unscheduled,
-                    mobile_payment: false,
-                    order_reference: item.router_data.connector_request_reference_id.to_owned(), //order_reference_string,
-                    nonce: time.unix_timestamp().to_string(),
-                    request_token: true,
-                    payment_description: item.router_data.description.clone(),
+                };
+
+                let ip_addr: Option<IpAddr> = item.router_data.request.get_browser_info().map(|info| info.ip_address).unwrap_or(None);
+                let ip_addr_string: String = ip_addr.map(|ip| ip.to_string()).unwrap_or("".to_string());
+
+                let customer = Customer {
                     email: item.router_data.request.email.clone(),
-                    customer_ip: None,
-                    preferred_country: get_country_code(
-                        item.router_data.address.get_payment_billing(),
-                    ),
-                    token_consent_agreed: true,
-                    timestamp: time
-                        .format(&Iso8601::DEFAULT)
-                        .change_context(errors::ConnectorError::DateFormattingFailed)?,
+                    ip: ip_addr_string,
+                    country: "ee".to_string(),
+                    locale: "en".to_string(),
+                };
+        
+                let app_info = AppInfo {
+                    module: "MakeCommerce Connector".to_string(),
+                    module_version: "1.0.0".to_string(),
+                    platform: "hyperswitch.io".to_string(),
+                    platform_version: "1.151.1".to_string(),
+                };
+
+                Ok(Self {
+                    transaction,
+                    customer,
+                    app_info,
                     ..MakecommercePaymentsRequest::default()
                 })
             }
@@ -224,6 +223,7 @@ pub enum MakecommercePaymentStatus {
     Voided,
     Refunded,
     Chargebacked,
+    CREATED,
 }
 
 impl From<MakecommercePaymentStatus> for enums::AttemptStatus {
@@ -233,6 +233,7 @@ impl From<MakecommercePaymentStatus> for enums::AttemptStatus {
             MakecommercePaymentStatus::Abandoned => Self::AuthorizationFailed,
             MakecommercePaymentStatus::Failed => Self::Failure,
             MakecommercePaymentStatus::Settled => Self::Charged,
+            MakecommercePaymentStatus::CREATED => Self::Authorized,
             MakecommercePaymentStatus::WaitingForSca | MakecommercePaymentStatus::WaitingFor3dsResponse => {
                 Self::Authorizing
             }
@@ -246,11 +247,38 @@ impl From<MakecommercePaymentStatus> for enums::AttemptStatus {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MakecommercePaymentsResponse {
-    pub payment_reference: String,
-    pub payment_link: String,
-    pub payment_state: MakecommercePaymentStatus,
+    pub _links: Links,
+    pub amount: f64,
+    pub country: String,
+    pub created_at: String,
+    pub currency: String,
+    pub id: String,
+    pub status: MakecommercePaymentStatus,
+    pub payment_methods: PaymentMethods,
 }
 
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Links {
+    #[serde(rename = "Pay")]
+    pay: Href,
+    #[serde(rename = "self")]
+    self_link: Href,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Href {
+    href: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct PaymentMethods {
+    cards: Vec<Card>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Card {
+    url: String,
+}
 
 impl<F>
     TryFrom<
@@ -271,17 +299,17 @@ impl<F>
             types::PaymentsResponseData,
         >,
     ) -> Result<Self, Self::Error> {
-        let redirect_url = Url::parse(item.response.payment_link.as_str())
+        let redirect_url = Url::parse(item.response.payment_methods.cards[0].url.as_str())
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
 
         logger::debug!("Received the redirect url {:?}", &redirect_url);
 
         let redirection_data = get_redirect_url_form(redirect_url).ok();
         Ok(Self {
-            status: enums::AttemptStatus::from(item.response.payment_state),
+            status: enums::AttemptStatus::from(item.response.status),
             response: Ok(types::PaymentsResponseData::TransactionResponse {
                 resource_id: types::ResponseId::ConnectorTransactionId(
-                    item.response.payment_reference,
+                    item.response.id,
                 ),
                 redirection_data,
                 mandate_reference: None,
@@ -308,15 +336,11 @@ fn get_redirect_url_form(
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct MakecommercePaymentSyncRequest {
     pub payment_reference: String,
-    pub api_username: Secret<String>,
-    pub detailed: bool,
-    pub base_url: Secret<String>,
 }
 
 impl TryFrom<&types::PaymentsSyncRouterData> for MakecommercePaymentSyncRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::PaymentsSyncRouterData) -> Result<Self, Self::Error> {
-        let auth_data = MakecommerceAuthType::try_from(&item.connector_auth_type)?;
         let payment_reference = item
             .request
             .connector_transaction_id
@@ -324,9 +348,6 @@ impl TryFrom<&types::PaymentsSyncRouterData> for MakecommercePaymentSyncRequest 
             .change_context(errors::ConnectorError::MissingConnectorTransactionID)?;
         Ok(Self {
             payment_reference,
-            api_username: auth_data.api_username,
-            detailed: true,
-            base_url: auth_data.base_url,
         })
     }
 }
@@ -334,7 +355,6 @@ impl TryFrom<&types::PaymentsSyncRouterData> for MakecommercePaymentSyncRequest 
 impl TryFrom<&types::PaymentsCompleteAuthorizeRouterData> for MakecommercePaymentSyncRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::PaymentsCompleteAuthorizeRouterData) -> Result<Self, Self::Error> {
-        let auth_data = MakecommerceAuthType::try_from(&item.connector_auth_type)?;
         let payment_reference = item
             .request
             .connector_transaction_id
@@ -342,9 +362,6 @@ impl TryFrom<&types::PaymentsCompleteAuthorizeRouterData> for MakecommercePaymen
             .ok_or(errors::ConnectorError::MissingConnectorTransactionID)?;
         Ok(Self {
             payment_reference,
-            base_url: auth_data.base_url,
-            api_username: auth_data.api_username,
-            detailed: true,
         })
     }
 }
@@ -391,7 +408,6 @@ impl<F, T>
 #[derive(Default, Debug, Serialize)]
 pub struct MakecommerceRefundRequest {
     pub amount: f64,
-    pub api_username: Secret<String>,
     pub payment_reference: String,
     pub nonce: String,
     pub timestamp: String,
@@ -406,7 +422,6 @@ impl<F> TryFrom<&MakecommerceRouterData<&types::RefundsRouterData<F>>> for Makec
         let time = OffsetDateTime::now_utc();
 
         Ok(Self {
-            api_username: auth_data.api_username,
             amount: item.amount.to_owned(),
             payment_reference: item.router_data.request.connector_transaction_id.to_owned(),
             nonce: time.unix_timestamp().to_string(),
@@ -430,7 +445,6 @@ impl From<MakecommercePaymentStatus> for enums::RefundStatus {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct MakecommerceRefundResponse {
-    pub api_username: Secret<String>,
     pub initial_amount: f64,
     pub standing_amount: f64,
     pub transaction_time: String,
@@ -458,21 +472,14 @@ impl TryFrom<types::RefundsResponseRouterData<api::Execute, MakecommerceRefundRe
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct MakecommerceRefundSyncRequest {
     pub payment_reference: String,
-    pub api_username: Secret<String>,
-    pub detailed: bool,
-    pub base_url: Secret<String>,
 }
 
 impl TryFrom<&types::RefundSyncRouterData> for MakecommerceRefundSyncRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(item: &types::RefundSyncRouterData) -> Result<Self, Self::Error> {
-        let auth_data = MakecommerceAuthType::try_from(&item.connector_auth_type)?;
         let payment_reference = item.request.connector_transaction_id.to_owned();
         Ok(Self {
             payment_reference,
-            api_username: auth_data.api_username,
-            detailed: true,
-            base_url: auth_data.base_url,
         })
     }
 }
