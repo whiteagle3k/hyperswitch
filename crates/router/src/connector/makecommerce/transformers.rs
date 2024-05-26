@@ -194,6 +194,7 @@ impl TryFrom<&MakecommerceRouterData<&types::PaymentsAuthorizeRouterData>> for M
     }
 }
 
+/*
 fn get_country_code(
     address: Option<&api_models::payments::Address>,
 ) -> Option<common_enums::CountryAlpha2> {
@@ -206,6 +207,7 @@ fn get_country_code(
             _ => common_enums::CountryAlpha2::EE,
         })
 }
+ */
 
 // PaymentsResponse
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -247,14 +249,14 @@ impl From<MakecommercePaymentStatus> for enums::AttemptStatus {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MakecommercePaymentsResponse {
-    pub _links: Links,
+    _links: Links,
     pub amount: f64,
     pub country: String,
     pub created_at: String,
     pub currency: String,
     pub id: String,
     pub status: MakecommercePaymentStatus,
-    pub payment_methods: PaymentMethods,
+    payment_methods: PaymentMethods,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -418,7 +420,6 @@ impl<F> TryFrom<&MakecommerceRouterData<&types::RefundsRouterData<F>>> for Makec
     fn try_from(
         item: &MakecommerceRouterData<&types::RefundsRouterData<F>>,
     ) -> Result<Self, Self::Error> {
-        let auth_data = MakecommerceAuthType::try_from(&item.router_data.connector_auth_type)?;
         let time = OffsetDateTime::now_utc();
 
         Ok(Self {
